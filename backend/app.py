@@ -5,7 +5,7 @@ import os
 
 from database import SessionLocal, engine, Base
 import models, schemas, crud
-from ai_client import generar_resumen  # <-- Import al cliente Groq
+from ai_client import generar_resumen, recomendar_tareas, detectar_bloqueos
 
 # Cargar variables de entorno (incluida GROQ_API_KEY)
 load_dotenv()
@@ -13,7 +13,7 @@ load_dotenv()
 # Crear tablas si no existen
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="MVP ScrumBoard Inteligente (básico con IA)")
+app = FastAPI(title="MVP ScrumBoard Inteligente con IA")
 
 
 # Dependencia para obtener sesión de DB
@@ -61,22 +61,86 @@ def delete_ticket(ticket_id: int, db: Session = Depends(get_db)):
     return {"detail": "Eliminado con éxito"}
 
 
-# ——— Nuevo endpoint IA ———
+# ——— Endpoints de IA ———
 
 @app.post("/ai/sumarizar/", tags=["IA"])
-async def ai_sumarizar(texto: dict):
+async def ai_sumarizar(payload: dict):
     """
-    Recibe un JSON con clave "texto", 
+    Recibe un JSON con clave "texto",
     invoca a Groq para generar un resumen y devuelve el resultado.
     Ejemplo de payload:
       { "texto": "Aquí va el texto que quieras resumir..." }
     """
-    contenido = texto.get("texto", "").strip()
+    contenido = payload.get("texto", "").strip()
     if not contenido:
         raise HTTPException(status_code=400, detail="El campo 'texto' no puede estar vacío.")
     try:
         resumen = await generar_resumen(contenido)
         return {"resumen": resumen}
     except Exception as e:
-        # Si hay error llamando a Groq, devolvemos un 502
         raise HTTPException(status_code=502, detail=f"Error en servicio IA: {e}")
+
+
+@app.post("/ai/recomendar_tareas/", tags=["IA"])
+async def ai_recomendar(payload: dict):
+    """
+    Recibe un JSON con:
+      - "objetivo": str
+      - "historial": List[str]
+    Devuelve una lista de tareas sugeridas en formato de texto (idealmente JSON generado por el modelo).
+    Ejemplo:
+    {
+      "objetivo": "Mejorar testing y documentación",
+      "historial": ["Test login", "Test API usuarios", "Documentar endpoints"]
+    }
+    """
+    objetivo = payload.get("objetivo", "").strip()
+    historial = payload.get("historial", [])
+    if not objetivo:
+        raise HTTPException(status_code=400, detail="El campo 'objetivo' no puede estar vacío.")
+    if not isinstance(historial, list):
+        raise HTTPException(status_code=400, detail="El campo 'historial' debe ser una lista de strings.")
+    try:
+        resultado = await recomendar_tareas(objetivo, historial)
+        return {"recomendaciones": resultado}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Error en servicio IA: {e}")
+
+
+@app.post("/ai/detectar_bloqueos/", tags=["IA"])
+async def ai_detectar_bloqueos(payload: dict):
+    """
+    Recibe un JSON con:
+      - "tickets": List[ { "titulo": str, "estado": str, "dias_sin_movimiento": int, "etiquetas": List[str] } ]
+    Devuelve un listado de tickets bloqueados generado por el modelo (en texto o JSON).
+    Ejemplo:
+    {
+      "tickets": [
+        { "titulo": "Refactorizar auth", "estado": "In Progress", "dias_sin_movimiento": 5, "etiquetas": [] },
+        { "titulo": "Implementar pagos", "estado": "To Do", "dias_sin_movimiento": 0, "etiquetas": ["bloqueado"] }
+      ]
+    }
+    """
+    tickets = payload.get("tickets", [])
+    if not isinstance(tickets, list) or any(
+        not isinstance(t, dict) for t in tickets
+    ):
+        raise HTTPException(status_code=400, detail="El campo 'tickets' debe ser una lista de objetos válidos.")
+    # Validar campos básicos de cada ticket
+    for t in tickets:
+        if "titulo" not in t or "estado" not in t or "dias_sin_movimiento" not in t or "etiquetas" not in t:
+            raise HTTPException(
+                status_code=400,
+                detail="Cada ticket debe tener 'titulo', 'estado', 'dias_sin_movimiento' y 'etiquetas'."
+            )
+    try:
+        resultado = await detectar_bloqueos(tickets)
+        return {"bloqueados": resultado}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Error en servicio IA: {e}")
+
+
+# Endpoint raíz para verificar que el servidor está levantado
+@app.get("/")
+def read_root():
+    return {"message": "API del ScrumBoard Inteligente con IA está en funcionamiento"}
