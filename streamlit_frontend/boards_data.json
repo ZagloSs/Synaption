@@ -1,0 +1,20 @@
+{
+  "boards": {
+    "MiTablero": {
+      "lists": {
+        "To Do": [],
+        "Doing": [],
+        "Done": [],
+        "que representa el histograma dado?": [],
+        "Jodidi": []
+      }
+    },
+    "Hazme una dieta equilibrada para el lunes": {
+      "lists": {
+        "To Do": [],
+        "Doing": [],
+        "Done": []
+      }
+    }
+  }
+}
