@@ -1,21 +1,56 @@
 import os
-import httpx
 from typing import Any, Dict, List
+from groq import Groq
 
-# Cargar clave de Groq desde variable de entorno
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-# URL base del endpoint de Groq (usamos LLaMA 3 Small como ejemplo)
-GROQ_API_URL = "https://api.groq.ai/v1/llms/llama3/completions"
+# Inicializar cliente Groq con clave de entorno
+groq_api_key = os.getenv("GROQ_API_KEY", "")
+client = Groq(api_key=groq_api_key)
 
+# Parámetros por defecto para las llamadas a completions
+MODEL = "deepseek-r1-distill-llama-70b"
+DEFAULT_KWARGS = {
+    "model": MODEL,
+    "top_p": 0.95,
+    "n": 1,
+}
+
+async def _run_completion(
+    prompt: str,
+    temperature: float = 0.0,
+    max_tokens: int = 300,
+    stream: bool = False,
+) -> str:
+    """
+    Envia un prompt al modelo y devuelve el texto completo.
+    Si `stream` es True, recopila los delta chunks hasta completarlo.
+    """
+    params = {
+        **DEFAULT_KWARGS,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": temperature,
+        "max_completion_tokens": max_tokens,
+        "stream": stream,
+    }
+    completion = await client.chat.completions.create(**params)
+
+    # Manejar streaming o respuesta única
+    if stream:
+        text = ""
+        async for chunk in completion:
+            delta = chunk.choices[0].delta.content
+            if delta:
+                text += delta
+        return text.strip()
+    else:
+        return completion.choices[0].message.content.strip()
 
 async def generar_resumen(texto: str) -> str:
     """
-    Envía un prompt a la API de Groq para generar un resumen del texto dado.
-    Devuelve el resumen en texto plano.
+    Genera un resumen estructurado en español con Avances de ayer, Objetivos para hoy y Bloqueos.
     """
     prompt = (
         "Eres un asistente experto en síntesis de texto.\n"
-        "Por favor, genera un resumen estructurado en español de la siguiente entrada:\n\n"
+        "Genera un resumen estructurado en español de la siguiente entrada:\n\n"
         f"{texto}\n\n"
         "El resumen debe incluir:\n"
         "- Avances de ayer\n"
@@ -23,32 +58,11 @@ async def generar_resumen(texto: str) -> str:
         "- Bloqueos\n\n"
         "Resumen:"
     )
-
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {GROQ_API_KEY}"
-    }
-
-    payload: Dict[str, Any] = {
-        "prompt": prompt,
-        "max_tokens": 300,
-        "temperature": 0.0,
-        "top_p": 0.95,
-        "n": 1
-    }
-
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.post(GROQ_API_URL, json=payload, headers=headers)
-        resp.raise_for_status()
-        data = resp.json()
-        return data["choices"][0].get("text", "").strip()
-
+    return await _run_completion(prompt, temperature=0.0, max_tokens=300)
 
 async def recomendar_tareas(objetivo: str, historial: List[str]) -> str:
     """
-    Envía un prompt a la API de Groq para sugerir nuevas tareas basadas en el objetivo del sprint
-    y el historial de tareas anteriores.
-    Devuelve la respuesta en texto plano (JSON o listado de tareas).
+    Sugiere 3 tareas nuevas en formato JSON basadas en el objetivo del sprint y el historial.
     """
     historial_text = "\n".join(f"- {t}" for t in historial)
     prompt = (
@@ -56,52 +70,17 @@ async def recomendar_tareas(objetivo: str, historial: List[str]) -> str:
         f"El objetivo del sprint es: \"{objetivo}\"\n"
         "Las tareas anteriores realizadas fueron:\n"
         f"{historial_text}\n\n"
-        "Con base en esta información, sugiere 3 tareas nuevas que el equipo podría necesitar.\n"
-        "Para cada tarea, incluye:\n"
-        "1. Título conciso.\n"
-        "2. Breve descripción.\n"
-        "3. Etiquetas o categorías (frontend/backend/testing/documentación).\n\n"
-        "Devuélvelas en formato JSON con lista de objetos así:\n"
-        "{\n"
-        "  \"tareas\": [\n"
-        "    { \"titulo\": \"...\", \"descripcion\": \"...\", \"etiquetas\": [\"...\"...] },\n"
-        "    ...\n"
-        "  ]\n"
-        "}\n"
+        "Sugiere 3 tareas nuevas con título, descripción y etiquetas (frontend/backend/testing/documentación)\n"
+        "Devuélvelas en JSON como:\n"
+        "{\n  \"tareas\": [ ... ]\n}\n"
         "JSON:"
     )
-
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {GROQ_API_KEY}"
-    }
-
-    payload: Dict[str, Any] = {
-        "prompt": prompt,
-        "max_tokens": 400,
-        "temperature": 0.2,
-        "top_p": 0.95,
-        "n": 1
-    }
-
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.post(GROQ_API_URL, json=payload, headers=headers)
-        resp.raise_for_status()
-        data = resp.json()
-        return data["choices"][0].get("text", "").strip()
-
+    return await _run_completion(prompt, temperature=0.2, max_tokens=400)
 
 async def detectar_bloqueos(tickets: List[Dict[str, Any]]) -> str:
     """
-    Envía un prompt a la API de Groq para identificar cuáles tickets parecen bloqueados.
-    Se espera que cada ticket sea un dict con campos:
-      - titulo (str)
-      - estado (str)
-      - dias_sin_movimiento (int)
-      - etiquetas (List[str])
-    Devuelve un texto con la lista de tickets bloqueados y la razón.
+    Identifica tickets bloqueados (>=3 días sin movimiento o etiqueta 'bloqueado'). Devuelve JSON.
     """
-    # Construir texto de entradas
     lineas = []
     for idx, t in enumerate(tickets, start=1):
         etiquetas = ", ".join(t.get("etiquetas", []))
@@ -111,40 +90,15 @@ async def detectar_bloqueos(tickets: List[Dict[str, Any]]) -> str:
             f"Días sin movimiento: {dias} - Etiquetas: [{etiquetas}]"
         )
     tickets_text = "\n".join(lineas)
-
     prompt = (
-        "Eres un asistente experto en Scrum. Analiza las siguientes tareas activas y determina cuáles parecen bloqueadas.\n"
+        "Eres un asistente experto en Scrum. Analiza las siguientes tareas activas y determina cuáles están bloqueadas.\n"
         "Criterios de bloqueo:\n"
         "- 3 o más días sin movimiento.\n"
-        "- Etiqueta 'bloqueado' si existe.\n"
-        "- Comentarios pendientes (no aplicamos aquí, solo fechas y etiquetas).\n\n"
+        "- Etiqueta 'bloqueado'.\n\n"
         "Lista de tareas:\n"
         f"{tickets_text}\n\n"
-        "Devuelve una lista en formato JSON así:\n"
-        "{\n"
-        "  \"bloqueados\": [\n"
-        "    { \"titulo\": \"...\", \"razon\": \"...\" },\n"
-        "    ...\n"
-        "  ]\n"
-        "}\n"
+        "Devuelve JSON así:\n"
+        "{\n  \"bloqueados\": [ { \"titulo\": ..., \"razon\": ... } ]\n}\n"
         "JSON:"
     )
-
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {GROQ_API_KEY}"
-    }
-
-    payload: Dict[str, Any] = {
-        "prompt": prompt,
-        "max_tokens": 300,
-        "temperature": 0.0,
-        "top_p": 0.95,
-        "n": 1
-    }
-
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.post(GROQ_API_URL, json=payload, headers=headers)
-        resp.raise_for_status()
-        data = resp.json()
-        return data["choices"][0].get("text", "").strip()
+    return await _run_completion(prompt, temperature=0.0, max_tokens=300)

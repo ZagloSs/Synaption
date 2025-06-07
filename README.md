@@ -1,83 +1,137 @@
-IA para la gestión de proyectos software
+# 🧠 ScrumBoard Inteligente con IA (MVP)
 
-Carlos Díez, Lucas de Diego, Javier Hevia y Adrián Tenorio
+Este proyecto es un **MVP funcional** de un Scrum Board que permite crear, gestionar y analizar tareas (tickets) con ayuda de inteligencia artificial gratuita usando **Groq + LLaMA 3**.
 
-# Funciones del jefe de proyecto
+## 🚀 Funcionalidades principales
 
-  
+### ✅ CRUD de tickets
 
-Un jefe de proyectos se encarga de liderar y coordinar la ejecución de un proyecto desde la planificación inicial hasta la entrega. El PM tiene que asegurarse de que se cumplan los objetivos de tiempo, coste, calidad y alcance del proyecto. La función de este varía según la metodología usada.
+* Crear, listar, actualizar y eliminar tareas del equipo (estilo Trello o Jira básico).
 
-  
+### 🤖 Módulos de IA integrados
 
-## Funciones del Jefe de proyectos(PM):
+* **Resumen de Dailies**: Genera resúmenes de reuniones diarias.
+* **Recomendación de tareas**: Sugiere nuevas tareas según el objetivo del Sprint y tareas pasadas.
+* **Detección de bloqueos**: Señala tickets estancados o con riesgo de estar bloqueados.
 
-1.  Planificación del proyecto
-    
-2.  Gestión de requisitos
-    
-3.  Gestión de plazos y entregas
-    
-4.  Gestión de recursos humanos
-    
-5.  Seguimiento
-    
-6.  Gestión de la comunicación
-    
-7.  Gestión de costes y presupuestos
-    
-8.  Gestión de riesgos
-    
-9.  Gestión de calidad
-    
+---
 
-  
+## 📦 Estructura del Proyecto
 
-## Cómo potenciar al PM con IA
+```
+backend/
+├── app.py               # API principal con FastAPI
+├── ai_client.py         # Cliente para llamar a la API de Groq (IA)
+├── database.py          # Configuración de la base de datos SQLite
+├── models.py            # Modelo de ticket (SQLAlchemy)
+├── schemas.py           # Validaciones de entrada/salida (Pydantic)
+├── crud.py              # Funciones básicas de base de datos
+├── requirements.txt     # Dependencias del proyecto
+└── .env                 # Clave de la API de Groq
+```
 
-Para el seguimiento del proyecto se podrá usar una integración con GitHub para leer commits y generar reportes de forma automática, generar un dashboard sobre el rendimiento del equipo, etc
+---
 
-  
+## 🔪 Requisitos
 
-Los agentes inteligentes se aplicarán para desempeñar tareas repetitivas como crear tickets o asignar desarrollos. (LLM con Zapier, Monday AI o PlannerAI)
+* Python 3.9 o superior
+* Cuenta gratuita en [https://groq.com](https://groq.com) con una API Key
 
-  
+---
 
-Para control de costes y presupuestos se aplicará la IA para estimar automáticamente los costes del proyecto por fases y detección de desviaciones presupuestarias.
+## ⚙️ Instalación paso a paso
 
-  
+```bash
+# 1. Clona el repositorio o copia los archivos
+cd backend
 
-Se podrán generar transcripciones, resúmenes y análisis de reuniones que queden guardados de forma permanente para ser consultados por los desarrolladores en cualquier momento.
+# 2. (Opcional) Crea un entorno virtual
+python3 -m venv venv
+source venv/bin/activate
 
-  
+# 3. Instala las dependencias
+pip install -r requirements.txt
 
-Otras integraciones útiles pueden ser, por ejemplo:
+# 4. Crea un archivo .env con tu clave de Groq
+echo "GROQ_API_KEY=tu_clave_de_groq" > .env
 
-  
+# 5. Inicia el servidor
+uvicorn app:app --reload
+```
 
-1.  IA + Calendario: Automatización de planificación y coordinación de eventos.
-    
-2.  IA + Ticketing: Creación de tickets automáticos desde descripciones generales o fallos detectados
-    
-3.  IA + Publicaciones / Anuncios programados: Agentes que comunican hitos, deadlines, cambios de alcance, etc.
-    
+La API estará disponible en: [http://127.0.0.1:8000](http://127.0.0.1:8000)
 
-  
+Documentación Swagger: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 
-# Idea final para el proyecto:
+---
 
-El equipo ha decidido crear un dashboard con integraciones IA estilo Trello o Notion que ayude a automatizar acciones, tener claro el sistema de trabajo, establecer workflow y pipeline y división de tareas entre los desarrolladores.
+## 🖼️ Frontend con Streamlit
 
-  
+Para iniciar la interfaz Kanban con Streamlit:
 
-## Funciones IA:
+```bash
+cd streamlit_frontend
+pip install -r requirements.txt
+streamlit run streamlit_app.py
+```
 
--   Integración IA para gestionar equipos ágiles
-    
--   IA – github para ver avances de implementación
-    
--   Chatbot general de consulta para el desarrollador.
-    
--   Generación de workflow en función de la metodología
-    
--   Dashboard visual (Tableros, Listas, Tarjetas, Timelines, etc)
+---
+
+## 🔢 Endpoints principales
+
+### CRUD de tickets
+
+* `POST /tickets/` – Crear una tarea
+* `GET /tickets/` – Listar tareas
+* `GET /tickets/{id}` – Ver detalle
+* `PATCH /tickets/{id}` – Editar tarea
+* `DELETE /tickets/{id}` – Eliminar tarea
+
+### IA: Resumen de dailies
+
+* `POST /ai/sumarizar/`
+
+```json
+{
+  "texto": "Ayer terminamos login. Hoy empezamos pruebas. Bloqueos: acceso a staging."
+}
+```
+
+### IA: Recomendación de tareas
+
+* `POST /ai/recomendar_tareas/`
+
+```json
+{
+  "objetivo": "Mejorar pruebas y documentación",
+  "historial": ["Test login", "Test API usuarios"]
+}
+```
+
+### IA: Detección de bloqueos
+
+* `POST /ai/detectar_bloqueos/`
+
+```json
+{
+  "tickets": [
+    {"titulo": "Refactorizar auth", "estado": "In Progress", "dias_sin_movimiento": 5, "etiquetas": []},
+    {"titulo": "Implementar pagos", "estado": "To Do", "dias_sin_movimiento": 0, "etiquetas": ["bloqueado"]}
+  ]
+}
+```
+
+---
+
+## 🚀 Para seguir expandiendo
+
+* Agregar modelo `Sprint` y `Project`
+* Persistencia avanzada (MongoDB Atlas)
+* Frontend en React con drag & drop
+* Agente IA para priorización y resumen completo de Sprint
+
+---
+
+## 🙌 Creditos
+
+Este MVP fue desarrollado como ejemplo funcional utilizando FastAPI, SQLite y la API gratuita de Groq con LLaMA 3. Ideal para validaciones rápidas o presentaciones en clase.

@@ -11,9 +11,9 @@ class TicketCreate(TicketBase):
     pass
 
 class TicketUpdate(BaseModel):
-    titulo: Optional[str]
-    descripcion: Optional[str]
-    estado: Optional[str]
+    titulo: Optional[str] = None
+    descripcion: Optional[str] = None
+    estado: Optional[str] = None
 
 class Ticket(TicketBase):
     id: int
